@@ -1,13 +1,12 @@
 </$objtype/mkfile
 
-BIN=/$objtype/bin/
+BIN=/$objtype/bin/games
 TARG=ballistics
 OFILES=\
 	main.$O\
-	util.$O\
-	vector.$O\
-	matrix.$O
 
-HFILES=dat.h fns.h
+HFILES=\
+	dat.h\
+	fns.h
 
 </sys/src/cmd/mkone
