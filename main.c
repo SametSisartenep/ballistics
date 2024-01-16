@@ -15,6 +15,7 @@ RFrame worldrf;
 Projectile ball;
 double t0, Δt;
 double v0;
+double A;	/* area of the projectile that meets the air */
 Point2 target;
 
 char stats[SLEN][64];
@@ -47,11 +48,27 @@ fromscreen(Point p)
 }
 
 void
+∫(double Δt)
+{
+	Point2 Fd;	/* drag force */
+
+	Fd = mulpt2(mulpt2(ball.v, -vec2len(ball.v)), 0.5 * Cd*ρ*A);	/* ½CdρAv² */
+	ball.v = addpt2(ball.v, mulpt2(addpt2(Vec2(0,-Eg), divpt2(Fd, ball.mass)), Δt));
+	ball.p = addpt2(ball.p, mulpt2(ball.v, Δt));
+	snprint(stats[Spos], sizeof(stats[Spos]), "p: %v", ball.p);
+	snprint(stats[Sdrag], sizeof(stats[Sdrag]), "Fd: %v", Fd);
+	if(ball.p.y <= (2+1)*M2PIX){
+		ball.p.y = (2+1)*M2PIX;
+		ball.v = Vec2(0,0);
+	}
+}
+
+void
 drawstats(void)
 {
 	int i;
 
-	snprint(stats[Svel], sizeof(stats[Svel]), "v: %gm/s", vec2len(ball.v));
+	snprint(stats[Svel], sizeof(stats[Svel]), "|v|: %gm/s", vec2len(ball.v));
 	snprint(stats[Sdeltax], sizeof(stats[Sdeltax]), "Δx: %gm", target.x-ball.p.x);
 	for(i = 0; i < nelem(stats); i++)
 		stringn(screen, addpt(screen->r.min, Pt(10, font->height*i+1)), statc, ZP, font, stats[i], sizeof(stats[i]));
@@ -86,7 +103,8 @@ mmb(void)
 	switch(menuhit(2, mc, &menu, nil)){
 	case SETV0:
 		enter("v0(m/s):", buf, sizeof(buf), mc, kc, nil);
-		v0 = strtod(buf, 0);
+		if(buf[0] != 0)
+			v0 = strtod(buf, nil);
 		break;
 	}
 }
@@ -124,7 +142,7 @@ mouse(void)
 	if(ball.p.y <= (2+1)*M2PIX){
 		p = subpt2(fromscreen(mc->xy), ball.p);
 		θ = atan2(p.y, p.x);
-		snprint(stats[Stheta], sizeof(stats[Stheta]), "θ: %g°", θ*180/PI);
+		snprint(stats[Stheta], sizeof(stats[Stheta]), "θ: %g°", θ/DEG);
 		dist = v0*v0*sin(2*θ)/Eg;
 		target = Pt2(ball.p.x+dist, 0, 1);
 		eta = 2*v0*sin(θ)/Eg;
@@ -204,6 +222,8 @@ threadmain(int argc, char *argv[])
 	ball.p = Pt2((2+1)*M2PIX,(2+1)*M2PIX,1);
 	ball.v = Vec2(0, 0);
 	ball.mass = 106000;
+	ball.r = 0.1;		/* 10cm */
+	A = 2*PI*ball.r*ball.r;	/* ½(4πr²) */
 	v0 = 1640; /* Paris Gun's specs */
 
 	scrsync = chancreate(1, 0);
@@ -227,14 +247,8 @@ threadmain(int argc, char *argv[])
 		case 2: key(r); break;
 		case 3: redraw(); break;
 		}
-		Δt = (nsec()-t0)/1e9;
-		ball.v = addpt2(ball.v, mulpt2(Vec2(0,-Eg), Δt));
-		ball.p = addpt2(ball.p, mulpt2(ball.v, Δt));
-		snprint(stats[Spos], sizeof(stats[Spos]), "p: %v", ball.p);
-		if(ball.p.y <= (2+1)*M2PIX){
-			ball.p.y = (2+1)*M2PIX;
-			ball.v = Vec2(0,0);
-		}
-		t0 += Δt*1e9;
+		Δt = (nsec()-t0);
+		∫(Δt/1e9);
+		t0 += Δt;
 	}
 }
