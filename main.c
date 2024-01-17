@@ -8,6 +8,8 @@
 #include "dat.h"
 #include "fns.h"
 
+double PIX2M = 5;
+
 Mousectl *mc;
 Keyboardctl *kc;
 Channel *scrsync;
@@ -56,7 +58,7 @@ void
 	ball.v = addpt2(ball.v, mulpt2(addpt2(Vec2(0,-Eg), divpt2(Fd, ball.mass)), Δt));
 	ball.p = addpt2(ball.p, mulpt2(ball.v, Δt));
 	snprint(stats[Spos], sizeof(stats[Spos]), "p: %v", ball.p);
-	snprint(stats[Sdrag], sizeof(stats[Sdrag]), "Fd: %v", Fd);
+	snprint(stats[Sdrag], sizeof(stats[Sdrag]), "Fd: %v", divpt2(Fd, ball.mass));
 	if(ball.p.y <= (2+1)*M2PIX){
 		ball.p.y = (2+1)*M2PIX;
 		ball.v = Vec2(0,0);
@@ -91,20 +93,48 @@ mmb(void)
 {
 	enum {
 		SETV0,
+		SETPOS,
+		SETMASS,
+		SETDIAM,
 	};
 	static char *items[] = {
 	 [SETV0]	"set v0",
+	 [SETPOS]	"set position",
+	 [SETMASS]	"set mass",
+	 [SETDIAM]	"set diameter",
 		nil
 	};
 	static Menu menu = { .item = items };
-	char buf[32];
+	char buf[32], *p;
 
-	snprint(buf, sizeof(buf), "%g", v0);
 	switch(menuhit(2, mc, &menu, nil)){
 	case SETV0:
+		snprint(buf, sizeof(buf), "%g", v0);
 		enter("v0(m/s):", buf, sizeof(buf), mc, kc, nil);
 		if(buf[0] != 0)
 			v0 = strtod(buf, nil);
+		break;
+	case SETPOS:
+		snprint(buf, sizeof(buf), "%g, %g", ball.p.x, ball.p.y);
+		enter("pos(x,y):", buf, sizeof(buf), mc, kc, nil);
+		if(buf[0] != 0 && (p = strchr(buf, ',')) != nil){
+			ball.p.x = strtod(buf, nil);
+			ball.p.y = strtod(p+1, nil);
+		}
+		break;
+	case SETMASS:
+		snprint(buf, sizeof(buf), "%g", ball.mass);
+		enter("mass(kg):", buf, sizeof(buf), mc, kc, nil);
+		if(buf[0] != 0)
+			ball.mass = strtod(buf, nil);
+		break;
+	case SETDIAM:
+		snprint(buf, sizeof(buf), "%g", 2*ball.r);
+		enter("diameter(m):", buf, sizeof(buf), mc, kc, nil);
+		if(buf[0] != 0){
+			ball.r = strtod(buf, nil)/2;
+			A = 2*PI*ball.r*ball.r;	/* ½(4πr²) */
+		}
 		break;
 	}
 }
@@ -134,6 +164,24 @@ rmb(void)
 }
 
 void
+zoomin(void)
+{
+	PIX2M += 0.01;
+	worldrf.bx = Vec2(PIX2M,0);
+	worldrf.by = Vec2(0,-PIX2M);
+	snprint(stats[Sscale], sizeof(stats[Sscale]), "s: %gm/pix", M2PIX);
+}
+
+void
+zoomout(void)
+{
+	PIX2M -= 0.01;
+	worldrf.bx = Vec2(PIX2M,0);
+	worldrf.by = Vec2(0,-PIX2M);
+	snprint(stats[Sscale], sizeof(stats[Sscale]), "s: %gm/px", M2PIX);
+}
+
+void
 mouse(void)
 {
 	Point2 p;
@@ -154,6 +202,10 @@ mouse(void)
 		mmb();
 	if((mc->buttons & 4) != 0)
 		rmb();
+	if((mc->buttons & 8) != 0)
+		zoomin();
+	if((mc->buttons & 16) != 0)
+		zoomout();
 }
 
 void
@@ -215,16 +267,18 @@ threadmain(int argc, char *argv[])
 	if(statc == nil)
 		sysfatal("allocimage: %r");
 
+	snprint(stats[Sscale], sizeof(stats[Sscale]), "s: %gm/pix", M2PIX);
+
 	worldrf.p = Pt2(screen->r.min.x, screen->r.max.y, 1);
 	worldrf.bx = Vec2(PIX2M,0);
 	worldrf.by = Vec2(0,-PIX2M);
 
 	ball.p = Pt2((2+1)*M2PIX,(2+1)*M2PIX,1);
 	ball.v = Vec2(0, 0);
-	ball.mass = 106000;
-	ball.r = 0.1;		/* 10cm */
+	ball.mass = 0.149;
+	ball.r = 0.375;		/* 3.75cm */
 	A = 2*PI*ball.r*ball.r;	/* ½(4πr²) */
-	v0 = 1640; /* Paris Gun's specs */
+	v0 = 53.64;		/* avg baseball hit speed */
 
 	scrsync = chancreate(1, 0);
 	display->locking = 1;
